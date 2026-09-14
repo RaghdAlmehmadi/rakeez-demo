@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rakeez — Feel the Sensor</title>
+<style>
+  :root{
+    --teal-900:#0a3f3b; --teal-700:#0d8f86; --teal-500:#14b8a6; --teal-100:#eaf8f6;
+    --green:#1a9e5c; --yellow:#e2ac1f; --orange:#e8823d; --red:#d34b3f;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    height:100%; width:100%; overflow:hidden;
+    background:linear-gradient(160deg, var(--teal-900), var(--teal-700));
+    font-family:'Helvetica Neue', Arial, sans-serif; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .screen{ width:100%; max-width:480px; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
+
+  .brand{ font-size:15px; letter-spacing:3px; color:#bfe9e4; margin-bottom:4px; }
+  h1{ font-size:30px; font-weight:800; margin-bottom:6px; }
+  .sub{ font-size:14px; color:#cdeeea; margin-bottom:34px; line-height:1.5; max-width:320px; }
+
+  /* Device visual */
+  .device-wrap{ position:relative; width:220px; height:220px; margin-bottom:30px; }
+  .glow{
+    position:absolute; inset:-30px; border-radius:50%;
+    background:radial-gradient(circle, var(--green) 0%, transparent 70%);
+    opacity:0.55; filter:blur(6px); transition:background 0.35s ease;
+  }
+  .disc{
+    position:absolute; inset:0; border-radius:50%;
+    background:linear-gradient(145deg,#f3f3f3,#d9d9d9);
+    box-shadow:0 10px 30px rgba(0,0,0,0.35), inset 0 2px 6px rgba(255,255,255,0.6);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ring{
+    position:absolute; inset:-9px; border-radius:50%;
+    border:9px solid var(--green); background:transparent;
+    box-shadow:0 0 22px 5px var(--green), inset 0 0 14px 2px var(--green);
+    transition:border-color 0.35s ease, box-shadow 0.35s ease;
+  }
+  .display{
+    width:96px; height:64px; background:#101418; border-radius:10px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    box-shadow:inset 0 0 0 2px #2a2f33;
+  }
+  .score{ font-size:26px; font-weight:800; transition:color 0.35s ease; }
+  .state-label{ font-size:10.5px; font-weight:600; letter-spacing:0.5px; color:#9aa4a8; margin-top:2px; }
+
+  .status-line{ font-size:16px; font-weight:700; margin-bottom:6px; min-height:22px; transition:color 0.3s ease; }
+  .hint{ font-size:12.5px; color:#a9d9d3; max-width:280px; line-height:1.5; }
+
+  button{
+    margin-top:28px; padding:14px 30px; border:none; border-radius:30px;
+    background:#fff; color:var(--teal-900); font-size:15px; font-weight:800;
+    box-shadow:0 6px 18px rgba(0,0,0,0.25); cursor:pointer;
+  }
+  button:active{ transform:scale(0.97); }
+
+  .footer{ position:absolute; bottom:16px; font-size:10.5px; color:#7fc9c0; opacity:0.8; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="brand">RAKEEZ</div>
+  <h1>Feel the Sensor</h1>
+  <div class="sub">This is the same motion sensor inside the real device — just borrowed from your phone for a moment.</div>
+
+  <div class="device-wrap">
+    <div class="glow" id="glow"></div>
+    <div class="disc">
+      <div class="display">
+        <div class="score" id="score">82</div>
+        <div class="state-label" id="stateLabel">FOCUSED</div>
+      </div>
+    </div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <div class="status-line" id="statusLine">Tap start, then move your phone</div>
+  <div class="hint">Hold still → calm green. Shake it hard → watch it spike to red, exactly like a distracted desk.</div>
+
+  <button id="startBtn">Start Sensing</button>
+
+  <div class="footer">Rakeez · Patent Pending · SAIP</div>
+</div>
+
+<script>
+(function(){
+  const glow = document.getElementById('glow');
+  const ring = document.getElementById('ring');
+  const scoreEl = document.getElementById('score');
+  const stateLabel = document.getElementById('stateLabel');
+  const statusLine = document.getElementById('statusLine');
+  const startBtn = document.getElementById('startBtn');
+
+  const COLORS = {
+    green:  '#1a9e5c',
+    yellow: '#e2ac1f',
+    orange: '#e8823d',
+    red:    '#d34b3f'
+  };
+
+  let lastX=null, lastY=null, lastZ=null;
+  let smoothedMagnitude = 0;
+  let currentScore = 82;
+  let running = false;
+
+  function setState(score){
+    let color, label;
+    if(score >= 75){ color = COLORS.green; label = 'FOCUSED'; }
+    else if(score >= 55){ color = COLORS.yellow; label = 'MILD DRIFT'; }
+    else if(score >= 35){ color = COLORS.orange; label = 'MODERATE'; }
+    else { color = COLORS.red; label = 'SUSTAINED'; }
+
+    ring.style.borderColor = color;
+    ring.style.boxShadow = '0 0 22px 5px ' + color + ', inset 0 0 14px 2px ' + color;
+    glow.style.background = 'radial-gradient(circle, ' + color + ' 0%, transparent 70%)';
+    scoreEl.style.color = color;
+    scoreEl.textContent = Math.round(score);
+    stateLabel.textContent = label;
+  }
+
+  function handleMotion(e){
+    const acc = e.accelerationIncludingGravity || e.acceleration;
+    if(!acc) return;
+    const x = acc.x || 0, y = acc.y || 0, z = acc.z || 0;
+
+    if(lastX !== null){
+      const delta = Math.abs(x-lastX) + Math.abs(y-lastY) + Math.abs(z-lastZ);
+      // smooth it so the score doesn't jitter frame to frame
+      smoothedMagnitude = smoothedMagnitude * 0.8 + delta * 0.2;
+    }
+    lastX=x; lastY=y; lastZ=z;
+
+    // Piecewise mapping: each level of shaking lands in its own colour band.
+    //   perfectly still  -> green   (>=75)
+    //   slight movement  -> yellow  (55-74)
+    //   deliberate shake -> orange  (35-54)
+    //   hard shake       -> red     (<35)
+    const m = smoothedMagnitude;
+    let target;
+    if (m < 0.8)       target = 90 - (m / 0.8) * 12;              // 90 -> 78  green
+    else if (m < 2.5)  target = 74 - ((m - 0.8) / 1.7) * 18;      // 74 -> 56  yellow
+    else if (m < 6.0)  target = 54 - ((m - 2.5) / 3.5) * 18;      // 54 -> 36  orange
+    else               target = Math.max(6, 34 - (m - 6.0) * 2.5); // 34 -> 6   red
+
+    currentScore = currentScore * 0.72 + target * 0.28;
+    currentScore = Math.min(96, Math.max(4, currentScore));
+    setState(currentScore);
+  }
+
+  function beginListening(){
+    window.addEventListener('devicemotion', handleMotion, true);
+    running = true;
+    statusLine.textContent = 'Sensing live — move your phone';
+    startBtn.style.display = 'none';
+  }
+
+  startBtn.addEventListener('click', function(){
+    // iOS 13+ requires an explicit permission request triggered by a user gesture
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+      DeviceMotionEvent.requestPermission().then(function(response){
+        if(response === 'granted'){
+          beginListening();
+        } else {
+          statusLine.textContent = 'Motion permission denied';
+        }
+      }).catch(function(){
+        statusLine.textContent = 'Motion sensors unavailable';
+      });
+    } else if (window.DeviceMotionEvent) {
+      beginListening();
+    } else {
+      statusLine.textContent = 'Your device has no motion sensor';
+    }
+  });
+})();
+</script>
+</body>
+</html>
